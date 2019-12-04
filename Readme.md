@@ -85,3 +85,7 @@ The following describes the algorithm at an overview level.
 Peak detection is used to find the beat in the frame energy autocorrelation and the cross-correlation of a step function with the energy envelope. 
 
 [Persistent homology](https://www.sthu.org/blog/13-perstopology-peakdetection/index.html) is used to detect the peaks.
+
+## DSP functions
+All the DSP functions, including the Daubechies-4 DWT are implemented in:
+[https://github.com/goccmack/godsp](https://github.com/goccmack/godsp)

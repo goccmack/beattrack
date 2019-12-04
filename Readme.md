@@ -13,6 +13,9 @@
 
 In addition to the frame records `beattrack` also reports the sample rate in Hz of the wav file as well as the average beats per second for the whole file.
 
+## Running `beattrack`
+Run `beattrack -h` for help.
+
 ## Input
 The input is a wav file.
 

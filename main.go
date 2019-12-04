@@ -22,6 +22,7 @@ import (
 	"math"
 	"os"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/goccmack/godsp"
@@ -51,6 +52,7 @@ type frameRecord struct {
 
 var (
 	inFileName  string
+	outFileName string
 	outPlotData = false
 
 	maxCorrelationDelay int
@@ -358,19 +360,44 @@ func fail(msg string) {
 }
 
 func getParams() {
+	help := flag.Bool("h", false, "")
 	plot := flag.Bool("plot", false, "")
+	outFile := flag.String("o", "", "")
 	flag.Parse()
 	if flag.NArg() != 1 {
 		fail("WAV file name required")
 	}
+	if *help {
+		usage()
+		os.Exit(0)
+	}
 	outPlotData = *plot
 	inFileName = flag.Arg(0)
+	if *outFile == "" {
+		outFileName = fromInFileName()
+	} else {
+		outFileName = *outFile
+	}
+}
+
+func fromInFileName() string {
+	dir, fname := path.Split(inFileName)
+	fnames := strings.Split(fname, ".")
+	fnames = append(fnames[:len(fnames)-1], "beat", "json")
+	return path.Join(dir, strings.Join(fnames, "."))
 }
 
 func usage() {
 	fmt.Println(usageString)
 }
 
-const usageString = `use: [-plot] beattrack <WAV File>
-where <WAV File> is the name of the input WAV file.
-	-plot: Optional. Default false. Generate files for plotting in matlab.`
+const usageString = `use: beattrack [-plot] [-o <out file>] <WAV File> or
+     beat -h
+where 
+	-h displays this help
+	
+	<WAV File> is the name of the input WAV file.
+	
+	-plot: Optional. Default false. Generate files for plotting in matlab.
+
+    -o <out file>: Optional. Default <WAV File>.beat.json`

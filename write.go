@@ -16,9 +16,8 @@ package main
 
 import (
 	"encoding/json"
+
 	"github.com/goccmack/godsp/ioutil"
-	"path"
-	"strings"
 )
 
 type OutRecord struct {
@@ -48,16 +47,9 @@ func writeFrameRecords() {
 	if err != nil {
 		panic(err)
 	}
-	if err := ioutil.WriteFile(getOutFileName(), buf); err != nil {
+	if err := ioutil.WriteFile(outFileName, buf); err != nil {
 		panic(err)
 	}
-}
-
-func getOutFileName() string {
-	dir, fname := path.Split(inFileName)
-	fnames := strings.Split(fname, ".")
-	fnames = append(fnames[:len(fnames)-1], "beat", "json")
-	return path.Join(dir, strings.Join(fnames, "."))
 }
 
 func getOutFrameRecord(fr *frameRecord) *OutFrameRecord {

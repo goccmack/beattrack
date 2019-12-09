@@ -32,6 +32,7 @@ type OutFrameRecord struct {
 	FrameOffs int // offset of this frame in number of samples from start of channel
 	BeatOffs  int // offset of the first beat from the start of the frame in samples
 	BeatLen   int // length of a beat in this frame in samples
+	TimePosMs int // position of the beat from the start in ms
 }
 
 func writeFrameRecords() {
@@ -58,5 +59,6 @@ func getOutFrameRecord(fr *frameRecord) *OutFrameRecord {
 		FrameOffs: scale * fr.offset,
 		BeatOffs:  scale * (fr.offset + fr.beatOffs),
 		BeatLen:   scale * fr.beatLen,
+		TimePosMs: (scale * fr.offset)*1000/fs,
 	}
 }

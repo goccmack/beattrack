@@ -282,7 +282,7 @@ func getBestBeat(fr *frameRecord) (btLen int, err float64) {
 		}
 	}
 	// fmt.Printf("getBestBeat fno %d bestACPk %d bestPkI %d\n", fr.frameNo, bestACPk, bestPkI)
-	return int(2 * float64(bestACPk) / float64(bestPkI+1)), minErr
+	return int(1 * float64(bestACPk) / float64(bestPkI+1)), minErr
 }
 
 func getErr(x, y int) float64 {

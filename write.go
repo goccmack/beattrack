@@ -21,8 +21,9 @@ import (
 )
 
 type OutRecord struct {
-	FileName           string  // Input file
-	SampleRate         int     // Hz
+	FileName           string // Input file
+	SampleRate         int    // Hz
+	NumChannels        int
 	AverageBeatsPerSec float64 // Average of the whole file
 	FrameRecords       []*OutFrameRecord
 }
@@ -31,6 +32,11 @@ type OutFrameRecord struct {
 	FrameNo   int
 	FrameOffs int // offset of this frame in number of samples from start of channel
 	BeatOffs  int // offset of the first beat from the start of the frame in samples
+
+	BeatOffsScale int // ToDo: delete me
+	LastBeatScale int // ToDo: delete
+	BeatLenScale  int // ToDo: delete
+
 	BeatLen   int // length of a beat in this frame in samples
 	TimePosMs int // position of the beat from the start in ms
 }
@@ -39,7 +45,8 @@ func writeFrameRecords() {
 	or := &OutRecord{
 		FileName:           inFileName,
 		SampleRate:         fs,
-		AverageBeatsPerSec: float64(fs) / float64(scale*averageBeatLength),
+		NumChannels:        numChannels,
+		AverageBeatsPerSec: float64(fs) / float64(Scale*averageBeatLength),
 	}
 	for _, fr := range frameRecords {
 		or.FrameRecords = append(or.FrameRecords, getOutFrameRecord(fr))
@@ -55,10 +62,13 @@ func writeFrameRecords() {
 
 func getOutFrameRecord(fr *frameRecord) *OutFrameRecord {
 	return &OutFrameRecord{
-		FrameNo:   fr.frameNo,
-		FrameOffs: scale * fr.offset,
-		BeatOffs:  scale * (fr.offset + fr.beatOffs),
-		BeatLen:   scale * fr.beatLen,
-		TimePosMs: (scale * fr.offset)*1000/fs,
+		FrameNo:       fr.frameNo,
+		FrameOffs:     Scale * fr.offset,
+		BeatOffs:      Scale * fr.beatOffs,
+		BeatOffsScale: fr.beatOffs,
+		LastBeatScale: fr.lastBeat(),
+		BeatLenScale:  fr.beatLen,
+		BeatLen:       Scale * fr.beatLen,
+		TimePosMs:     (Scale * fr.offset) * 1000 / fs,
 	}
 }

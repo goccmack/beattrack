@@ -1,6 +1,6 @@
 # beattrack - Track the rhythm of music in a wav file.
 
-`Beattrack` is a command-line application that tracks the rhythm of music. The primary application is to play video frame-by-frame to the rythm of the sound track. 
+`Beattrack` is a command-line application that tracks the rhythm of music. The primary application is to play video frame-by-frame to the rhythm of the sound track. 
 
 `beattrack` is ignorant of musical structure. I simply detects and tracks the rhythm of sound energy produced by the music. In the rest of this description *beat* will refer to the rhythm detected by `beattrack`. This rhythm will be the fastest rhythm in the music and the real **beat** will typically be a factor of this rhythm, for example: half or one quarter of the "beat" reported by `beattrack`. 
 

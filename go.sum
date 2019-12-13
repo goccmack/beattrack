@@ -3,6 +3,8 @@ github.com/go-audio/riff v1.0.0/go.mod h1:l3cQwc85y79NQFCRB7TiPoNiaijp6q8Z0Uv38r
 github.com/go-audio/wav v1.0.0/go.mod h1:3yoReyQOsiARkvPl3ERCi8JFjihzG6WhjYpZCf5zAWE=
 github.com/goccmack/godsp v0.0.1 h1:QxGGy04RLPoTXXAu6TtnyKGwQmQfbczJJCVV1Ok1RXI=
 github.com/goccmack/godsp v0.0.1/go.mod h1:3hoEhcCJ86HA50i16ogqAYhX/x1iTjyLJg/5Yo+0kT8=
+github.com/goccmack/godsp v0.0.2 h1:j97Nw7fOpuuvDtzfjKXjBT+amRWBQSwpO6KRQiCQngo=
+github.com/goccmack/godsp v0.0.2/go.mod h1:3hoEhcCJ86HA50i16ogqAYhX/x1iTjyLJg/5Yo+0kT8=
 github.com/gogo/protobuf v1.3.1/go.mod h1:SlYgWuQ5SjCEi6WLHjHCa1yvBfUnHcTbrrZtXPKa29o=
 github.com/kisielk/errcheck v1.2.0/go.mod h1:/BMXB+zMLi60iA8Vv6Ksmxu/1UDYcXs4uQLJ+jE2L00=
 github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+oQHNcck=

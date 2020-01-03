@@ -50,9 +50,10 @@ var (
 	frameSize           int
 
 	// Wav file parameters
-	fs          int // Sampling frequency in Hz
-	numSamples  int
-	numChannels int
+	bitsPerSample int
+	fs            int // Sampling frequency in Hz
+	numSamples    int
+	numChannels   int
 
 	frameInc       int // Number of samples by which frame is moved
 	histogram      []int
@@ -70,7 +71,8 @@ func main() {
 	getParams()
 
 	var channels [][]float64
-	channels, fs = godsp.ReadWavFile(inFileName)
+	channels, fs, bitsPerSample = godsp.ReadWavFile(inFileName)
+	fmt.Printf("bits per sample %d\n", bitsPerSample)
 
 	numChannels = len(channels)
 
@@ -138,7 +140,7 @@ func getAveragePeakPeriod(peaks []int) int {
 
 func generateFrameRecords(channel []float64, sLen int) {
 	from, frameNo := 0, 0
-	for from < sLen/Scale {
+	for from < sLen/Scale-frameSize {
 		fmt.Printf("processFrames: i %d, offs %d\n", frameNo, from)
 		generateFrameRecord(channel[from:from+frameSize], frameNo, from)
 		from, frameNo = from+frameInc, frameNo+1
@@ -296,18 +298,19 @@ func getBeatOffset(fr *frameRecord) {
 		godsp.WriteDataFile(fr.xcEWithBeat, getFileName(outDir, "xcEBeat", fr.frameNo))
 	}
 
-	earliestBeatOffset := 1
+	earliestBeatOffset := fr.offset
 
+	fmt.Printf("getBeatOffset fno %d\n", fr.frameNo)
 	if fr.frameNo > 0 {
 		lastFrame := frameRecords[fr.frameNo-1]
+		fmt.Printf("  lastFrame %d err %s\n", lastFrame.frameNo, lastFrame.err)
 		if lastFrame.err == nil {
 			earliestBeatOffset = lastFrame.lastBeat() + lastFrame.beatLen
 		}
 		earliestBeatOffset -= fr.offset
 	}
 
-	// fmt.Printf("  getBeatOffset fno %d, foffs %d eoffs %d eoffs\n", fr.frameNo, fr.offset, earliestBeatOffset)
-
+	fmt.Printf("  getBeatOffset fno %d, foffs %d eoffs %d eoffs\n", fr.frameNo, fr.offset, earliestBeatOffset)
 	fr.beatOffs = findEnergyFront(fr.xcEWithBeat, earliestBeatOffset)
 	if fr.beatOffs-fr.beatLen >= earliestBeatOffset {
 		fr.beatOffs -= fr.beatLen
@@ -319,7 +322,7 @@ func getBeatOffset(fr *frameRecord) {
 }
 
 func findEnergyFront(xc []float64, offset int) int {
-	// fmt.Printf("findEnergyFront %d\n", offset)
+	fmt.Printf("findEnergyFront len(xc)=%d offset=%d\n", len(xc), offset)
 	wdw := 200
 	avg := godsp.Average(xc[offset:])
 

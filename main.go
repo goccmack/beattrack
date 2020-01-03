@@ -300,10 +300,10 @@ func getBeatOffset(fr *frameRecord) {
 
 	earliestBeatOffset := fr.offset
 
-	fmt.Printf("getBeatOffset fno %d\n", fr.frameNo)
+	// fmt.Printf("getBeatOffset fno %d\n", fr.frameNo)
 	if fr.frameNo > 0 {
 		lastFrame := frameRecords[fr.frameNo-1]
-		fmt.Printf("  lastFrame %d err %s\n", lastFrame.frameNo, lastFrame.err)
+		// fmt.Printf("  lastFrame %d err %s\n", lastFrame.frameNo, lastFrame.err)
 		if lastFrame.err == nil {
 			earliestBeatOffset = lastFrame.lastBeat() + lastFrame.beatLen
 		}

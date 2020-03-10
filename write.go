@@ -39,6 +39,8 @@ type OutFrameRecord struct {
 
 	BeatLen   int // length of a beat in this frame in samples
 	TimePosMs int // position of the beat from the start in ms
+
+	Error float64 // The beat error for this frame as a fraction of 1
 }
 
 func writeFrameRecords() {
@@ -70,5 +72,6 @@ func getOutFrameRecord(fr *frameRecord) *OutFrameRecord {
 		BeatLenScale:  fr.beatLen,
 		BeatLen:       Scale * fr.beatLen,
 		TimePosMs:     (Scale * fr.offset) * 1000 / fs,
+		Error:         fr.errorValue,
 	}
 }

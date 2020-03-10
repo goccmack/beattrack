@@ -10,6 +10,7 @@ type frameRecord struct {
 	beatOffs       int // offset of beat in frame
 	beatLen        int // samples
 	err            error
+	errorValue     float64
 }
 
 func (fr *frameRecord) lastBeat() int {

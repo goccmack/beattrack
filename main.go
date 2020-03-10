@@ -235,7 +235,7 @@ func getBeatForFrames() {
 }
 
 func getBeatForFrame(fr *frameRecord) {
-	fr.beatLen, fr.err = getBeatLen(fr)
+	fr.beatLen, fr.errorValue, fr.err = getBeatLen(fr)
 
 	// fmt.Printf("getBeatForFrame %d: btLen %d\n", fr.frameNo, fr.beatLen)
 
@@ -244,13 +244,13 @@ func getBeatForFrame(fr *frameRecord) {
 	}
 }
 
-func getBeatLen(fr *frameRecord) (int, error) {
+func getBeatLen(fr *frameRecord) (int, float64, error) {
 	btLen, err := getBestBeat(fr)
 	if err > .15 {
 		fmt.Printf("getBeatLen: fno %d, btLen %d, err %.3f\n", fr.frameNo, btLen, err)
-		return -1, fmt.Errorf("Beat error too large: %f", err)
+		return -1, err, fmt.Errorf("Beat error too large: %f", err)
 	}
-	return btLen, nil
+	return btLen, err, nil
 }
 
 func getBiggestEACPeak(fr *frameRecord) int {

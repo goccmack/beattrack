@@ -74,6 +74,10 @@ The time in seconds of beat `i ϵ 0..n-1` in any frame is:
 (FrameOffs + (i+1) * BeatOffs) / Fs seconds
 ```
 
+`BeatLen` gives the length of the beat for this frame in number of samples.
+`BeatLen < 0` means that the error of the computed beat length was too high for
+this frame and the `BeatOffs` is also meaningless for this frame.
+
 ## Installation
 
 1. `beattrack` requires Go v1.13. To install Go: [https://golang.org/doc/install](https://golang.org/doc/install).

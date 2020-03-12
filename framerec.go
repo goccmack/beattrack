@@ -11,6 +11,7 @@ type frameRecord struct {
 	beatLen        int // samples
 	err            error
 	errorValue     float64
+	rhythms        []*Rhythm
 }
 
 func (fr *frameRecord) lastBeat() int {
@@ -23,6 +24,13 @@ func (fr *frameRecord) lastBeat() int {
 	for ; lastBeat < maxFrame-fr.beatLen; lastBeat += fr.beatLen {
 	}
 	// fmt.Printf("fr.lastBeat fno %d foffs %d bt offs %d bt len %d last beat %d maxFrame %d fsz %d\n",
-	// fr.frameNo, fr.offset, fr.beatOffs, fr.beatLen, lastBeat, maxFrame, frameInc)
+	// 	fr.frameNo, fr.offset, fr.beatOffs, fr.beatLen, lastBeat, maxFrame, frameInc)
 	return lastBeat
+}
+
+type Rhythm struct {
+	Freq     float64 // Hz
+	Energy   float64 // Xcorr energy of this frequency
+	BeatLen  int     // Number of samples at Fs
+	BeatOffs int     // Number of samples from start of frame at Fs
 }

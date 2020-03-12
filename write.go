@@ -34,15 +34,17 @@ type OutFrameRecord struct {
 	BeatOffs  int // offset of the first beat from the start of the frame in samples
 
 	// Debug
-	BeatOffsScale int     // ToDo: delete
-	LastBeatScale int     // ToDo: delete
-	BeatLenScale  int     // ToDo: delete
-	BeatHz        float64 // ToDo: delete
+	BeatOffsScale int // ToDo: delete
+	LastBeatScale int // ToDo: delete
+	BeatLenScale  int // ToDo: delete
 
-	BeatLen   int // length of a beat in this frame in samples
-	TimePosMs int // position of the beat from the start in ms
+	BeatLen   int     // length of a beat in this frame in samples
+	BeatHz    float64 // beat in Hz
+	TimePosMs int     // position of the beat from the start in ms
 
 	Error float64 // The beat error for this frame as a fraction of 1
+
+	Rhythms []*Rhythm
 }
 
 func writeFrameRecords() {
@@ -70,13 +72,15 @@ func getOutFrameRecord(fr *frameRecord) *OutFrameRecord {
 		FrameOffs: Scale * fr.offset,
 		BeatOffs:  Scale * fr.beatOffs,
 		BeatLen:   Scale * fr.beatLen,
+		BeatHz:    float64(fs) / float64(Scale*fr.beatLen),
 		TimePosMs: (Scale * fr.offset) * 1000 / fs,
 		Error:     fr.errorValue,
+		Rhythms:   fr.rhythms,
 
 		// Debug
 		BeatOffsScale: fr.beatOffs,
 		LastBeatScale: fr.lastBeat(),
 		BeatLenScale:  fr.beatLen,
-		BeatHz:        float64(fs) / float64(Scale*fr.beatLen),
 	}
+
 }

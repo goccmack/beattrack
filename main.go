@@ -34,12 +34,12 @@ const (
 	// of the signal
 	Scale = 1 << DWTLevel
 	// FrameSec is size of each frame in seconds
-	FrameSec = 2
+	FrameSec = 1
 	// FrameIncSec is the number of seconds by which the frame is moved.
 	FrameIncSec = 1
 	// CorrelationSec is the maximum lag of the autocorrelation of the
 	// energy envelope in seconds.
-	CorrelationSec = 1.5
+	CorrelationSec = 1
 	// BinsPerSec is the number of bins per second in the histogram
 	BinsPerSec = 30
 	// SmoothWdw is the numer of energy envelope samples used to smooth the signal.
@@ -50,7 +50,9 @@ const (
 	// Persitence of a peak in the peak detection algoritm
 	PeakPersistence = .5
 	// MaxDanceTempo in Hz
-	MaxDanceTempo = 3.06
+	MaxDanceTempo = 2.5
+	// MinDanceTempo in Hz
+	MinDanceTempo = 1
 
 	// Directory for output
 	outDir = "out"
@@ -67,6 +69,7 @@ var (
 	// Wav file parameters
 	bitsPerSample int
 	fs            int // Sampling frequency in Hz
+	fss           int // Samples/sec at highest DWT scale
 	numSamples    int
 	numChannels   int
 
@@ -78,6 +81,7 @@ var (
 	frameRecords      = make([]*frameRecord, 0, 256)
 	averageBeatLength int
 
+	maxDancePeakOffs int
 	minDancePeakOffs int
 
 	impulse []float64
@@ -97,13 +101,14 @@ func main() {
 	frameSize = FrameSec * fs / Scale
 	frameInc = int(FrameIncSec*float64(fs)) / Scale
 	fmt.Printf("frameSize=%d numSamples=%d\n", frameSize, numSamples)
+	fss = int(float64(fs) / float64(Scale))
 	maxCorrelationDelay = int(CorrelationSec*float64(fs)) / Scale
 	numBins := math.Ceil(BinsPerSec * CorrelationSec)
 	binSize = int(math.Ceil(CorrelationSec * float64(fs) / (numBins * float64(Scale))))
 	fmt.Printf("%d bins size %d\n", int(numBins), binSize)
 	histogram = make([]int, int(numBins))
 	impulse = getImpulse()
-	minDancePeakOffs = getMinDancePeakOffs()
+	minDancePeakOffs, maxDancePeakOffs = getDancePeakOffs()
 	fmt.Printf("minDancePeakOffs = %d\n", minDancePeakOffs)
 
 	db4 := dwt.Daubechies4(channels[0], DWTLevel)
@@ -130,16 +135,36 @@ func main() {
 
 	averageBeatLength = getAvgBeatLen()
 
-	getBeatForFrames()
+	// getBeatForFrames()
 
 	writeFrameRecords()
 
 	if outPlotData {
 		writeMLBeat(godsp.Max(channels[0]), len(channels[0]))
-		writeScaleBeat(len(sumX))
+		// writeScaleBeat(len(sumX))
 	}
 
 	fmt.Println(time.Now().Sub(start))
+}
+
+func findEnergyFront(xc []float64, offset int) int {
+	fmt.Printf("findEnergyFront len(xc)=%d offset=%d\n", len(xc), offset)
+	wdw := 200
+	avg := godsp.Average(xc[offset:])
+
+	// fmt.Printf("findEFront\n")
+	for i := offset; i < len(xc)-wdw; i += 10 {
+		fmt.Printf("   %d: %f %f\n", i, avg, godsp.Max(xc[i:i+wdw]))
+		if godsp.Max(xc[i:i+wdw]) >= avg {
+			for j := i; j < i+wdw; j++ {
+				if xc[j] >= avg {
+					return j
+				}
+			}
+			panic("max not found")
+		}
+	}
+	return offset
 }
 
 func getAvgBeatLen() int {
@@ -162,7 +187,7 @@ func getAveragePeakPeriod(peaks []int) int {
 func generateFrameRecords(channel []float64, sLen int) {
 	from, frameNo := 0, 0
 	for from < sLen/Scale-frameSize {
-		fmt.Printf("processFrames: i %d, offs %d\n", frameNo, from)
+		// fmt.Printf("processFrames: i %d, offs %d\n", frameNo, from)
 		generateFrameRecord(channel[from:from+frameSize], frameNo, from)
 		from, frameNo = from+frameInc, frameNo+1
 	}
@@ -170,9 +195,6 @@ func generateFrameRecords(channel []float64, sLen int) {
 }
 
 func generateFrameRecord(sumX []float64, frameNo, offset int) {
-	if outPlotData {
-		godsp.WriteDataFile(sumX, fmt.Sprintf("%s/sumX%03d", outDir, frameNo))
-	}
 	acX := godsp.Xcorr(sumX, sumX, maxCorrelationDelay)
 	acX = godsp.Sub(acX, godsp.MovAvg(acX, MovAvgWdw))
 	for i := 0; i < MovAvgWdw; i++ {
@@ -187,7 +209,6 @@ func generateFrameRecord(sumX []float64, frameNo, offset int) {
 		godsp.WriteDataFile(acX, fmt.Sprintf("%s/sumAC%03d", outDir, frameNo))
 	}
 	pks := godsp.GetPeaks(acX)
-	// pkIdx := pks.GetIndices(.2)
 	pkIdx := pks.GetIndices(PeakPersistence)
 
 	if outPlotData {
@@ -205,7 +226,26 @@ func generateFrameRecord(sumX []float64, frameNo, offset int) {
 		acE:            acX,
 		acEEPeaks:      pkIdx,
 	}
+	fr.beatLen, fr.errorValue, fr.err = getBeatLen(fr)
+	if fr.err == nil {
+		fr.beatOffs = getBeatOffset(sumX, fr.beatLen, fmt.Sprintf("%d_main", frameNo))
+		for i, pk := range pkIdx {
+			fr.rhythms = append(fr.rhythms, getRhythm(sumX, pk, acX[pk], frameNo, i))
+		}
+	}
 	frameRecords = append(frameRecords, fr)
+}
+
+func getBeat(btlen, frmSize, frmOffs int) []float64 {
+	// fmt.Printf("getBeat %d %d %d\n", btlen, frmSize, frmOffs)
+	bt := make([]float64, frameSize)
+	pulseWidth := 50
+	for i := frmOffs; i < len(bt)-pulseWidth; i += btlen {
+		for j := i; j < i+pulseWidth; j++ {
+			bt[j] = 4
+		}
+	}
+	return bt
 }
 
 func getFrameSize(s int) int {
@@ -222,63 +262,12 @@ func abs(x int) int {
 	return x
 }
 
-func getBeat(btlen, frmSize, frmOffs int) []float64 {
-	fmt.Printf("getBeat %d %d %d\n", btlen, frmSize, frmOffs)
-	bt := make([]float64, frameSize)
-	for i := frmOffs; i < len(bt); i += btlen {
-		bt[i] = 1
-	}
-	return bt
-}
-
-func getHistogramPeaks() []int {
-	histPeaks := godsp.GetPeaksInt(histogram)
-	peaks := histPeaks.GetIndices(.25)
-	for i, pk := range peaks {
-		peaks[i] = pk * binSize
-	}
-	if outPlotData {
-		godsp.WriteIntDataFile(peaks, path.Join(outDir, "histogramPeaks"))
-	}
-	return peaks
-}
-
-func getBeatForFrames() {
-	totalBeat, numBeat := 0, 0
-	for _, fr := range frameRecords {
-		getBeatForFrame(fr)
-		if fr.err == nil {
-			totalBeat += fr.beatLen
-			numBeat++
-		}
-	}
-	// fmt.Printf("getBeatForFrames: avg beat len = %d\n",
-	// 	int(float64(totalBeat)/float64(numBeat)))
-}
-
-func getBeatForFrame(fr *frameRecord) {
-	fr.beatLen, fr.errorValue, fr.err = getBeatLen(fr)
-
-	fmt.Printf("getBeatForFrame %d: btLen %d\n", fr.frameNo, fr.beatLen)
-
-	if fr.err == nil {
-		getBeatOffset(fr)
-	}
-}
-
 func getBeatLen(fr *frameRecord) (int, float64, error) {
 	btLen, err := getBiggestEACPeakOffset(fr)
 	if err != nil {
 		return -1, 1, err
 	}
 	return btLen, 0, nil
-
-	// btLen, err := getBestBeat(fr)
-	// if err > .15 {
-	// 	fmt.Printf("getBeatLen: fno %d, btLen %d, err %.3f\n", fr.frameNo, btLen, err)
-	// 	return -1, err, fmt.Errorf("Beat error too large: %f", err)
-	// }
-	// return btLen, err, nil
 }
 
 // return the offset in the frame of the biggest peak
@@ -286,128 +275,63 @@ func getBiggestEACPeakOffset(fr *frameRecord) (int, error) {
 	fmt.Printf("getBiggestPeak frm %d\n", fr.frameNo)
 	biggest := -1
 	for i, pk := range fr.acEEPeaks {
-		fmt.Printf("  peak %d offs %d = %f - %.2f Hz\n", i, pk, fr.acE[pk],
-			float64(fs)/float64(Scale*pk))
-		if (biggest == -1 || fr.acE[pk] > fr.acE[fr.acEEPeaks[biggest]]) && pk >= minDancePeakOffs {
+		// fmt.Printf("  peak %d offs %d = %f - %.2f Hz\n", i, pk, fr.acE[pk],
+		// 	float64(fs)/float64(Scale*pk))
+		if (biggest == -1 ||
+			fr.acE[pk] > fr.acE[fr.acEEPeaks[biggest]]) &&
+			pk >= minDancePeakOffs && pk <= maxDancePeakOffs {
 			biggest = i
 		}
 	}
 	if biggest == -1 {
 		return -1, fmt.Errorf("No valid peak")
 	}
-	fmt.Printf("  biggest %d %d=%f\n", biggest, fr.acEEPeaks[biggest], fr.acE[fr.acEEPeaks[biggest]])
+	// fmt.Printf("  biggest %d %d=%f\n", biggest, fr.acEEPeaks[biggest], fr.acE[fr.acEEPeaks[biggest]])
 	return fr.acEEPeaks[biggest], nil
 }
 
 /*
 Return the base beat of the peak that most closely matches the histogram
 */
-func getBestBeat(fr *frameRecord) (btLen int, err float64) {
-	minErr, bestPkI, bestACPk := math.Inf(1), -1, -1
-	for _, acPk := range fr.acEEPeaks {
-		if acPk < frameInc {
-			// fmt.Printf("  acPk %d\n", acPk)
-			for pkI, hPk := range histogramPeaks {
-				// fmt.Printf("    pki %d pk %d", pkI, hPk)
-				if err := getErr(acPk, hPk); err < minErr {
-					// fmt.Printf(" err %.3f", err)
-					minErr = err
-					bestPkI = pkI
-					bestACPk = acPk
-				}
-				// fmt.Println()
-			}
-		}
-	}
-	// fmt.Printf("getBestBeat fno %d bestACPk %d bestPkI %d\n", fr.frameNo, bestACPk, bestPkI)
-	return int(1 * float64(bestACPk) / float64(bestPkI+1)), minErr
-}
-
-func getErr(x, y int) float64 {
-	return math.Abs(float64(x-y) / float64(y))
-}
-
-// func getBeatOffset(fr *frameRecord) {
-// 	// XCorrelate energy envelope of this frame with impulse
-// 	fr.xcEWithBeat = godsp.Xcorr(impulse, fr.energyEnvelope, frameSize)
-// 	if outPlotData {
-// 		godsp.WriteDataFile(fr.xcEWithBeat, getFileName(outDir, "xcEBeat", fr.frameNo))
-// 	}
-
-// 	earliestBeatOffset := fr.offset
-
-// 	// fmt.Printf("getBeatOffset fno %d\n", fr.frameNo)
-// 	if fr.frameNo > 0 {
-// 		lastFrame := frameRecords[fr.frameNo-1]
-// 		// fmt.Printf("  lastFrame %d err %s\n", lastFrame.frameNo, lastFrame.err)
-// 		if lastFrame.err == nil {
-// 			earliestBeatOffset = lastFrame.lastBeat() + lastFrame.beatLen
+// func getBestBeat(fr *frameRecord) (btLen int, err float64) {
+// 	minErr, bestPkI, bestACPk := math.Inf(1), -1, -1
+// 	for _, acPk := range fr.acEEPeaks {
+// 		if acPk < frameInc {
+// 			// fmt.Printf("  acPk %d\n", acPk)
+// 			for pkI, hPk := range histogramPeaks {
+// 				// fmt.Printf("    pki %d pk %d", pkI, hPk)
+// 				if err := getErr(acPk, hPk); err < minErr {
+// 					// fmt.Printf(" err %.3f", err)
+// 					minErr = err
+// 					bestPkI = pkI
+// 					bestACPk = acPk
+// 				}
+// 				// fmt.Println()
+// 			}
 // 		}
-// 		earliestBeatOffset -= fr.offset
 // 	}
-
-// 	fmt.Printf("  getBeatOffset fno %d, foffs %d eoffs %d eoffs\n", fr.frameNo, fr.offset, earliestBeatOffset)
-// 	fr.beatOffs = findEnergyFront(fr.xcEWithBeat, earliestBeatOffset)
-// 	if fr.beatOffs-fr.beatLen >= earliestBeatOffset {
-// 		fr.beatOffs -= fr.beatLen
-// 	}
-
-// 	// fmt.Printf("    fno %d: offs %d beat after %d btOffs %d lastBt %d\n",
-// 	// 	fr.frameNo, fr.offset, fr.beatOffs-fr.offset,
-// 	// 	fr.beatOffs, fr.lastBeat())
+// 	// fmt.Printf("getBestBeat fno %d bestACPk %d bestPkI %d\n", fr.frameNo, bestACPk, bestPkI)
+// 	return int(1 * float64(bestACPk) / float64(bestPkI+1)), minErr
 // }
 
-func getBeatOffset(fr *frameRecord) {
-	fmt.Println("getBeatOffset frm ", fr.frameNo)
-	bt := getBeat(fr.beatLen, len(fr.energyEnvelope), 0)
-	// XCorrelate energy envelope of this frame with beat
-	fr.xcEWithBeat = godsp.Xcorr(fr.energyEnvelope, bt, frameSize)
-	fmt.Println("  XCor done")
+func getBeatOffset(energyEnvelop []float64, beatLen int, filePrefix string) int {
+	bt := getBeat(beatLen, len(energyEnvelop), beatLen)
+	// XCorrelate energy envelope with beat
+	xcEWithBeat := godsp.Xcorr(energyEnvelop, bt, len(energyEnvelop))
+	pks := godsp.GetPeaks(xcEWithBeat)
+	maxPk := pks.Max(.3)
+	// xcEWithBeat = godsp.Sub(xcEWithBeat, godsp.MovAvg(xcEWithBeat, 20))
+	// for i := 0; i < 20; i++ {
+	// 	xcEWithBeat[i] = 0
+	// }
+	// godsp.Smooth(xcEWithBeat, 20)
+
 	if outPlotData {
-		godsp.WriteDataFile(fr.xcEWithBeat, getFileName(outDir, "xcEBeat", fr.frameNo))
+		godsp.WriteDataFile(xcEWithBeat, "out/xcE"+filePrefix)
 	}
 
-	earliestBeatOffset := fr.offset
-
-	fmt.Printf("getBeatOffset fno %d\n", fr.frameNo)
-	if fr.frameNo > 0 {
-		lastFrame := frameRecords[fr.frameNo-1]
-		// fmt.Printf("  lastFrame %d err %s\n", lastFrame.frameNo, lastFrame.err)
-		if lastFrame.err == nil {
-			earliestBeatOffset = lastFrame.lastBeat() + lastFrame.beatLen
-		}
-		earliestBeatOffset -= fr.offset
-	}
-
-	fmt.Printf("  getBeatOffset fno %d, foffs %d eoffs %d eoffs\n", fr.frameNo, fr.offset, earliestBeatOffset)
-	fr.beatOffs = findEnergyFront(fr.xcEWithBeat, earliestBeatOffset)
-	if fr.beatOffs-fr.beatLen >= earliestBeatOffset {
-		fr.beatOffs -= fr.beatLen
-	}
-
-	fmt.Printf("    fno %d: offs %d beat after %d btOffs %d lastBt %d\n",
-		fr.frameNo, fr.offset, fr.beatOffs-fr.offset,
-		fr.beatOffs, fr.lastBeat())
-}
-
-func findEnergyFront(xc []float64, offset int) int {
-	fmt.Printf("findEnergyFront len(xc)=%d offset=%d\n", len(xc), offset)
-	wdw := 200
-	avg := godsp.Average(xc[offset:])
-
-	// fmt.Printf("findEFront\n")
-	for i := offset; i < len(xc)-wdw; i += 10 {
-		fmt.Printf("   %d: %f %f\n", i, avg, godsp.Max(xc[i:i+wdw]))
-		if godsp.Max(xc[i:i+wdw]) >= avg {
-			for j := i; j < i+wdw; j++ {
-				if xc[j] >= avg {
-					return j
-				}
-			}
-			panic("max not found")
-		}
-	}
-	return offset
+	return maxPk
+	// return findEnergyFront(xcEWithBeat, 0)
 }
 
 func getClosestHistogramPeak(pkI int) int {
@@ -432,6 +356,27 @@ func getClosestHistogramPeak(pkI int) int {
 	return minHI
 }
 
+func getErr(x, y int) float64 {
+	return math.Abs(float64(x-y) / float64(y))
+}
+
+// beatLen is the length of a beat at highest DWT scale
+func getFreq(beatLen int) float64 {
+	return float64(fss) / float64(beatLen)
+}
+
+func getHistogramPeaks() []int {
+	histPeaks := godsp.GetPeaksInt(histogram)
+	peaks := histPeaks.GetIndices(.25)
+	for i, pk := range peaks {
+		peaks[i] = pk * binSize
+	}
+	if outPlotData {
+		godsp.WriteIntDataFile(peaks, path.Join(outDir, "histogramPeaks"))
+	}
+	return peaks
+}
+
 func getImpulse() []float64 {
 	x := make([]float64, frameSize)
 	N := 100
@@ -442,7 +387,6 @@ func getImpulse() []float64 {
 }
 
 func getMainRhythms(sumX []float64) {
-	fmt.Println("Start AC")
 	r := godsp.Xcorr(sumX, sumX, maxCorrelationDelay)
 	pks := godsp.GetPeaks(r)
 	idcs := pks.GetIndices(PeakPersistence)
@@ -451,12 +395,23 @@ func getMainRhythms(sumX []float64) {
 			idx, r[idx],
 			(float64(44100)/16)/float64(idx))
 	}
-	fmt.Println("AC done")
 }
 
-func getMinDancePeakOffs() int {
-	offs := float64(fs) / MaxDanceTempo
-	return int(offs / float64(Scale))
+func getDancePeakOffs() (min, max int) {
+	min = int((float64(fs) / MaxDanceTempo) / float64(Scale))
+	max = int((float64(fs) / MinDanceTempo) / float64(Scale))
+	return
+}
+
+// beatLen at highest DWT scale
+func getRhythm(sumX []float64, beatLen int, energy float64, frameNo, rhythmNo int) *Rhythm {
+	btOffs := getBeatOffset(sumX, beatLen, fmt.Sprintf("%d_%d", frameNo, rhythmNo))
+	return &Rhythm{
+		Freq:     getFreq(beatLen),
+		Energy:   energy,
+		BeatLen:  beatLen * Scale,
+		BeatOffs: btOffs * Scale,
+	}
 }
 
 /*
@@ -478,17 +433,17 @@ func writeMLBeat(btValue float64, numSamples int) {
 	}
 }
 
-func writeScaleBeat(numSamples int) {
-	bt := make([]float64, numSamples)
-	for _, fr := range frameRecords {
-		if fr.err == nil {
-			for i := fr.offset + fr.beatOffs; i <= fr.lastBeat(); i += fr.beatLen {
-				bt[i] = 1
-			}
-		}
-	}
-	godsp.WriteDataFile(bt, "out/beat_scale")
-}
+// func writeScaleBeat(numSamples int) {
+// 	bt := make([]float64, numSamples)
+// 	for _, fr := range frameRecords {
+// 		if fr.err == nil {
+// 			for i := fr.offset + fr.beatOffs; i <= fr.lastBeat(); i += fr.beatLen {
+// 				bt[i] = 1
+// 			}
+// 		}
+// 	}
+// 	godsp.WriteDataFile(bt, "out/beat_scale")
+// }
 
 func zeroNeg(x []float64) {
 	for i, v := range x {

@@ -17,7 +17,7 @@ package main
 import (
 	"encoding/json"
 
-	"github.com/goccmack/godsp/ioutil"
+	"github.com/goccmack/goutil/ioutil"
 )
 
 type OutRecord struct {
@@ -33,9 +33,11 @@ type OutFrameRecord struct {
 	FrameOffs int // offset of this frame in number of samples from start of channel
 	BeatOffs  int // offset of the first beat from the start of the frame in samples
 
-	BeatOffsScale int // ToDo: delete me
-	LastBeatScale int // ToDo: delete
-	BeatLenScale  int // ToDo: delete
+	// Debug
+	BeatOffsScale int     // ToDo: delete
+	LastBeatScale int     // ToDo: delete
+	BeatLenScale  int     // ToDo: delete
+	BeatHz        float64 // ToDo: delete
 
 	BeatLen   int // length of a beat in this frame in samples
 	TimePosMs int // position of the beat from the start in ms
@@ -64,14 +66,17 @@ func writeFrameRecords() {
 
 func getOutFrameRecord(fr *frameRecord) *OutFrameRecord {
 	return &OutFrameRecord{
-		FrameNo:       fr.frameNo,
-		FrameOffs:     Scale * fr.offset,
-		BeatOffs:      Scale * fr.beatOffs,
+		FrameNo:   fr.frameNo,
+		FrameOffs: Scale * fr.offset,
+		BeatOffs:  Scale * fr.beatOffs,
+		BeatLen:   Scale * fr.beatLen,
+		TimePosMs: (Scale * fr.offset) * 1000 / fs,
+		Error:     fr.errorValue,
+
+		// Debug
 		BeatOffsScale: fr.beatOffs,
 		LastBeatScale: fr.lastBeat(),
 		BeatLenScale:  fr.beatLen,
-		BeatLen:       Scale * fr.beatLen,
-		TimePosMs:     (Scale * fr.offset) * 1000 / fs,
-		Error:         fr.errorValue,
+		BeatHz:        float64(fs) / float64(Scale*fr.beatLen),
 	}
 }

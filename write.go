@@ -21,41 +21,16 @@ import (
 )
 
 type OutRecord struct {
-	FileName           string // Input file
-	SampleRate         int    // Hz
-	NumChannels        int
-	AverageBeatsPerSec float64 // Average of the whole file
-	FrameRecords       []*OutFrameRecord
-}
-
-type OutFrameRecord struct {
-	FrameNo   int
-	FrameOffs int // offset of this frame in number of samples from start of channel
-	BeatOffs  int // offset of the first beat from the start of the frame in samples
-
-	// Debug
-	BeatOffsScale int // ToDo: delete
-	LastBeatScale int // ToDo: delete
-	BeatLenScale  int // ToDo: delete
-
-	BeatLen   int     // length of a beat in this frame in samples
-	BeatHz    float64 // beat in Hz
-	TimePosMs int     // position of the beat from the start in ms
-
-	Error float64 // The beat error for this frame as a fraction of 1
-
-	Rhythms []*Rhythm
+	FileName    string // Input file
+	SampleRate  int    // Hz
+	NumChannels int
 }
 
 func writeFrameRecords() {
 	or := &OutRecord{
-		FileName:           inFileName,
-		SampleRate:         fs,
-		NumChannels:        numChannels,
-		AverageBeatsPerSec: float64(fs) / float64(Scale*averageBeatLength),
-	}
-	for _, fr := range frameRecords {
-		or.FrameRecords = append(or.FrameRecords, getOutFrameRecord(fr))
+		FileName:    inFileName,
+		SampleRate:  fs,
+		NumChannels: numChannels,
 	}
 	buf, err := json.Marshal(or)
 	if err != nil {
@@ -64,23 +39,4 @@ func writeFrameRecords() {
 	if err := ioutil.WriteFile(outFileName, buf); err != nil {
 		panic(err)
 	}
-}
-
-func getOutFrameRecord(fr *frameRecord) *OutFrameRecord {
-	return &OutFrameRecord{
-		FrameNo:   fr.frameNo,
-		FrameOffs: Scale * fr.offset,
-		BeatOffs:  Scale * fr.beatOffs,
-		BeatLen:   Scale * fr.beatLen,
-		BeatHz:    float64(fs) / float64(Scale*fr.beatLen),
-		TimePosMs: (Scale * fr.offset) * 1000 / fs,
-		Error:     fr.errorValue,
-		Rhythms:   fr.rhythms,
-
-		// Debug
-		BeatOffsScale: fr.beatOffs,
-		LastBeatScale: fr.lastBeat(),
-		BeatLenScale:  fr.beatLen,
-	}
-
 }

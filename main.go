@@ -37,7 +37,7 @@ const (
 	Scale = 1 << DWTLevel
 
 	// DefaultPeakSepMs is the default minimum peak separation distance
-	DefaultPeakSepMs = 20
+	DefaultPeakSepMs = 250
 
 	// Directory for plot output
 	outDir = "out"
@@ -58,14 +58,14 @@ var (
 
 type OutRecord struct {
 	FileName       string // Input file
-	SampleRate     int    // Hz
+	SampleRate     int    // Fs in Hz
 	NumChannels    int    // Number of channels in wav file
-	PeakSeparation int    // Minimum distance between peaks in milleseconds
-	Peaks          []Peak // Offset of peak in milliseconds from the start of the audio
+	PeakSeparation int    // Minimum distance between peaks in milliseconds
+	Peaks          []Peak // List of detected peaks
 }
 
 type Peak struct {
-	Offset   int // Number of samples from start of channel at Fss
+	Offset   int // Number of samples from start of channel at Fs
 	MsOffset int // Number of milliseconds from start of channel
 }
 
@@ -202,15 +202,15 @@ func usage() {
 }
 
 const usageString = `use: beattrack [-sep dist] [-plot] [-o <out file>] <WAV File> or
-     beat -h
+     beattrack -h
 where 
-	-h displays this help
+    -h displays this help
 	
     <WAV File> is the name of the input WAV file.
     
     -sep ms: Optional. The mininum number of millisec between adjacent peaks.
-               Default: 20
+               Default: 250
 	
-	-plot: Optional. Default false. Generate files for plotting in matlab.
+    -plot: Optional. Default false. Generate files for plotting in matlab.
 
     -o <out file>: Optional. Default <WAV File>.beat.json`

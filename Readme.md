@@ -2,81 +2,108 @@
 
 ## Status
 
+This version - v1 - works on a different principle than v0. See **How it works** below.
+The output is incompatible with v0.
+
 `Beattrack` is still in an early stage of development and will
 not work on all audio files. The following types of input are problematic:
 
 1. Music without a strong rhythm.
 1. Tracks where the music is weaker than other audio noise.
    For example: video taken on a cell phone in a noisy environment.
-1. Tracks shorter than 20 seconds.
 
 `Beattrack` has been tested successfully on Salsa and Kizomba.
 
 ## Overview
 
-`Beattrack` is a command-line application that tracks the rhythm of music. The primary application is to play video frame-by-frame to the rhythm of the sound track.
+`beattrack` is a command-line application that tracks the rhythm of music. The primary application is to play video frame-by-frame to the rhythm of the sound track.
 
-`beattrack` is ignorant of musical structure. I simply detects and tracks the rhythm of sound energy produced by the music. In the rest of this description _beat_ will refer to the rhythm detected by `beattrack`. This rhythm will be the fastest rhythm in the music and the real **beat** will typically be a factor of this rhythm, for example: half or one quarter of the "beat" reported by `beattrack`.
+`beattrack` is ignorant of musical structure. It simply detects and tracks the rhythm of sound energy produced by the music. In the rest of this description _beat_ will refer to the rhythm detected by `beattrack`.
 
-`beattrack` processes the sound track in a sequence of consecutive 2 second frames. For every frame it writes a frame record (see **Output** below) containing:
+`beattrack` has only one adjustable parameter: the minimum time between two rhythmic peaks.
+By turning this knob the user can find the best extracted rhythm for a particular
+piece of music, as illustrated by the figures below.
 
-1. The frame number. The first frame has number 0.
-2. The frame offset in the demultiplexed stream of samples.
-3. The offset of the first beat in the frame.
-4. The number of samples between beats in the frame.
-5. The error of the calculated beat length as a fraction of 1.
+Both graphs in the figure below show the energy envelope of the same 3 seconds of a salsa. The blue graph represents the sound
+energy against time. The rhythmic pattern of the music is clearly visible. Samples 4723..6139 show
+3 more or less equally spaced notes of approximately the same duration. The black lines
+show the peaks reported by `beattrack`. The graph on the left shows the peaks detected for
+`sep=250`, while the graph on the right shows the peaks for `sep=50`. The shorter the minimum
+separation, the more peaks will be reported.
 
-In addition to the frame records `beattrack` also reports the sample rate in Hz of the wav file as well as the average beats per second for the whole file.
+![](fig/salsa.png)
+
+The figure below shows the peaks reported for 10 seconds of a kizomba with `sep = 250`.
+
+![](fig/kizomba.png)
 
 ## Running `beattrack`
 
-Run `beattrack -h` for help.
+Run `beattr -sep ms wavfile` to process `wavfile` with a minimum separation
+between peaks of `ms` milliseconds.
 
-## Input
+Run `beattrack -h` for more extensive help.
+
+### Input
 
 The input is a wav file.
 
-## Output
+### Output
 
 `beattrack` produces a JSON file containing the following data structure:
 
 ```
 type OutRecord struct {
-	FileName           string  // Input file
-	SampleRate         int     // Hz
-	AverageBeatsPerSec float64 // Average of the whole file
-	FrameRecords       []*OutFrameRecord
+	FileName       string // Input file
+	SampleRate     int    // Fs in Hz
+	NumChannels    int    // Number of channels in wav file
+	PeakSeparation int    // Minimum distance between peaks in milliseconds
+	Peaks          []Peak // List of detected peaks
 }
 
-type OutFrameRecord struct {
-	FrameNo   int
-	FrameOffs int // offset of this frame in number of samples from start of channel
-	BeatOffs  int // offset of the first beat from the start of the frame in samples
-	BeatLen   int // length of a beat in this frame in samples
-	TimePosMs int // position of the beat from the start in ms
-	Error float64 // The beat error for this frame as a fraction of 1
+type Peak struct {
+	Offset   int // Number of samples from start of channel at Fs
+	MsOffset int // Number of milliseconds from start of channel
+}
+
+```
+
+The extract below shows a sample output:
+
+```
+{
+    "FileName": "salsa2.wav",
+    "SampleRate": 44100,
+    "NumChannels": 2,
+    "PeakSeparation": 250,
+    "Peaks": [
+        {
+            "Offset": 12752,
+            "MsOffset": 289
+        },
+```
+
+The first peak is 289 ms or 12752 samples from the start of the channel.
+
+```
+        {
+            "Offset": 28432,
+            "MsOffset": 644
+        },
+        {
+            "Offset": 56768,
+            "MsOffset": 1287
+        },
+        .
+        .
+        .
+        {
+            "Offset": 1312864,
+            "MsOffset": 29772
+        }
+    ]
 }
 ```
-
-## Using the frame records
-
-`FrameNo` gives the number of the frame, in the range 0..n.
-Each frame spans `2 seconds` of music. Thus `frame 0` covers `0..2 sec`, `frame 1` covers `2..4 sec`, etc.
-
-Let `Fs` be the sample rate in samples per second. Then each frame spans
-`2 * Fs samples` The start position of frame number `i` is: `i * 2 * Fs samples`. This is the same value as `FrameOffs`. The end position of frame `i` is: `(i+1) * 2 * Fs - 1` or `FrameOffs + 2 * Fs - 1`.
-
-The position of the first beat in any frame is: `FrameOffs + BeatOffs`. The position of beat `i ϵ 0..n-1` in any frame is: `FrameOffs + (i+1) * BeatOffs`
-
-The time in seconds of beat `i ϵ 0..n-1` in any frame is:
-
-```
-(FrameOffs + (i+1) * BeatOffs) / Fs seconds
-```
-
-`BeatLen` gives the length of the beat for this frame in number of samples.
-`BeatLen < 0` means that the error of the computed beat length was too high for
-this frame and the `BeatOffs` is also meaningless for this frame.
 
 ## Installation
 
@@ -91,10 +118,9 @@ this frame and the `BeatOffs` is also meaningless for this frame.
     George Tzanetakis, Georg Essl, Perry Cook
     Proceedings of the WSES International Conference Acoustics and Music: Theory and Applications (AMTA 2001)
 
-The paper by Tzanetakis et.al. describes a system to detect the average beat in music. `beattrack` extends this approach to detect the beat in every frame and also to track the position of the beats in the frame.
+The paper by Tzanetakis et.al. describes a system to detect the average beat in music. `beattrack` extends this approach to track the position of the rhytm in the channel.
 
-The beat detection depends on the sound energy of the rhythm in each frame. It is not possible to detect an accurate beat for every frame. When
-the system cannot detect a beat for a frame it uses the average beat for the frame.
+The rhythm detection depends on the sound energy of the rhythm at each point in the channel.
 
 The following describes the algorithm at an overview level.
 
@@ -105,19 +131,17 @@ The following describes the algorithm at an overview level.
 3. All scales are full-wave rectified as described in Tzanetakis et. al.
 4. All scales are normalised as in Tzanetakis et. al.
 5. The four scales are summed. This gives the energy envelope of the signal.
-6. The summed energy signal is framed in 2 second frames.
-7. The frame energy envelope of each frame is autocorrelated as described in Tzanetakis et. al.
-8. The beats detected in each frame are histogrammed. This gives the average beat for the whole piece of music.
-9. For each frame: if a beat can be detected in the frame it is used, otherwise the average beat is used for the frame.
-10. The frame energy envelope is cross-correlated with a step function to find the offset of the first beat in the frame.
 
-## Peak detection
+At this point we deviate from Tsanetakis by:
 
-Peak detection is used to find the beat in the frame energy autocorrelation and the cross-correlation of a step function with the energy envelope.
-
-[Persistent homology](https://www.sthu.org/blog/13-perstopology-peakdetection/index.html) is used to detect the peaks.
+6. Finding the peaks of energy envelop with a configurable minimum separation
+   between peaks.
 
 ## DSP functions
 
-All the DSP functions, including the Daubechies-4 DWT are implemented in:
+All the DSP functions, including the Daubechies-4 DWT and peak detection, are implemented in:
 [https://github.com/goccmack/godsp](https://github.com/goccmack/godsp)
+
+```
+
+```

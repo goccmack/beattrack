@@ -50,6 +50,7 @@ var (
 	fs          int // Sampling frequency in Hz
 	fss         int // Samples/sec at highest DWT scale
 	numChannels int
+	sep         int // Minimum number of samples between peaks
 )
 
 func main() {
@@ -122,6 +123,7 @@ func getParams() {
 	help := flag.Bool("h", false, "")
 	plot := flag.Bool("plot", false, "")
 	outFile := flag.String("o", "", "")
+	sepFlag := flag.Int("sep", DefaultPeakSep, "")
 	flag.Parse()
 	if flag.NArg() != 1 {
 		fail("WAV file name required")
@@ -137,6 +139,7 @@ func getParams() {
 	} else {
 		outFileName = *outFile
 	}
+	sep = *sepFlag
 }
 
 func fromInFileName() string {
@@ -150,12 +153,15 @@ func usage() {
 	fmt.Println(usageString)
 }
 
-const usageString = `use: beattrack [-plot] [-o <out file>] <WAV File> or
+const usageString = `use: beattrack [-sep dist] [-plot] [-o <out file>] <WAV File> or
      beat -h
 where 
 	-h displays this help
 	
-	<WAV File> is the name of the input WAV file.
+    <WAV File> is the name of the input WAV file.
+    
+    -sep dist: Optional. The minum number of samples between adjacent peaks.
+               Default: 1000
 	
 	-plot: Optional. Default false. Generate files for plotting in matlab.
 

@@ -15,6 +15,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -25,6 +26,7 @@ import (
 	"github.com/goccmack/godsp"
 	"github.com/goccmack/godsp/dwt"
 	"github.com/goccmack/godsp/peaks"
+	"github.com/goccmack/goutil/ioutil"
 )
 
 const (
@@ -34,8 +36,8 @@ const (
 	// of the signal
 	Scale = 1 << DWTLevel
 
-	// DefaultPeakSep is the default minimum peak separation distance
-	DefaultPeakSep = 1000
+	// DefaultPeakSepMs is the default minimum peak separation distance
+	DefaultPeakSepMs = 20
 
 	// Directory for plot output
 	outDir = "out"
@@ -50,8 +52,22 @@ var (
 	fs          int // Sampling frequency in Hz
 	fss         int // Samples/sec at highest DWT scale
 	numChannels int
-	sep         int // Minimum number of samples between peaks
+
+	sepMs = flag.Int("sep", DefaultPeakSepMs, "")
 )
+
+type OutRecord struct {
+	FileName       string // Input file
+	SampleRate     int    // Hz
+	NumChannels    int    // Number of channels in wav file
+	PeakSeparation int    // Minimum distance between peaks in milleseconds
+	Peaks          []Peak // Offset of peak in milliseconds from the start of the audio
+}
+
+type Peak struct {
+	Offset   int // Number of samples from start of channel at Fss
+	MsOffset int // Number of milliseconds from start of channel
+}
 
 func main() {
 	start := time.Now()
@@ -64,6 +80,11 @@ func main() {
 
 	// Compute parameters
 	fss = int(float64(fs) / float64(Scale))
+	sepFss := *sepMs * fs / (Scale * 1000)
+	if sepFss <= 0 {
+		minSepMs := Scale * 1000 / fs
+		fail(fmt.Sprintf("sep is too small. Minimum for this file is %d", minSepMs))
+	}
 	db4 := dwt.Daubechies4(channels[0], DWTLevel)
 	// coefs := godsp.LowpassFilterAll(db4.GetCoefficients(), .99)
 	coefs := db4.GetCoefficients()
@@ -72,7 +93,8 @@ func main() {
 	// normX := godsp.RemoveAvgAllZ(dsX)
 	sumX := godsp.SumVectors(dsX)
 	sumX = godsp.DivS(sumX, godsp.Average(sumX))
-	sumXPeaks := peaks.Get(sumX, 1000)
+	sumXPeaks := peaks.Get(sumX, sepFss)
+	writeOutput(sumXPeaks, sepFss)
 
 	if outPlotData {
 		godsp.WriteDataFile(sumX, "out/sumX")
@@ -88,6 +110,11 @@ func getFreq(beatLen int) float64 {
 	return float64(fss) / float64(beatLen)
 }
 
+// returns the millisec offset of offs samples at fss
+func toMilliSecOffs(offs int) int {
+	return offs * 1000 / fss
+}
+
 /*
 writeMLBeat writes a beat for MatLab
 */
@@ -95,11 +122,34 @@ func writeMLBeat(peaks []int, btValue float64, numSamples int) {
 	bt := make([]float64, numSamples)
 	for _, pk := range peaks {
 		for i := 0; i < 100; i++ {
-			bt[pk*Scale+i] = btValue
+			offs := pk*Scale + i
+			if offs < numSamples {
+				bt[pk*Scale+i] = btValue
+			}
 		}
 	}
-	if outPlotData {
-		godsp.WriteDataFile(bt, path.Join(outDir, "beat.txt"))
+	godsp.WriteDataFile(bt, path.Join(outDir, "beat.txt"))
+}
+
+// Write the JSON output file
+func writeOutput(peaks []int, sepFss int) {
+	or := &OutRecord{
+		FileName:       inFileName,
+		SampleRate:     fs,
+		NumChannels:    numChannels,
+		PeakSeparation: toMilliSecOffs(sepFss),
+		Peaks:          make([]Peak, len(peaks)),
+	}
+	for i, pk := range peaks {
+		or.Peaks[i].Offset = Scale * pk
+		or.Peaks[i].MsOffset = toMilliSecOffs(pk)
+	}
+	buf, err := json.Marshal(or)
+	if err != nil {
+		panic(err)
+	}
+	if err := ioutil.WriteFile(outFileName, buf); err != nil {
+		panic(err)
 	}
 }
 
@@ -123,7 +173,6 @@ func getParams() {
 	help := flag.Bool("h", false, "")
 	plot := flag.Bool("plot", false, "")
 	outFile := flag.String("o", "", "")
-	sepFlag := flag.Int("sep", DefaultPeakSep, "")
 	flag.Parse()
 	if flag.NArg() != 1 {
 		fail("WAV file name required")
@@ -139,7 +188,6 @@ func getParams() {
 	} else {
 		outFileName = *outFile
 	}
-	sep = *sepFlag
 }
 
 func fromInFileName() string {
@@ -160,8 +208,8 @@ where
 	
     <WAV File> is the name of the input WAV file.
     
-    -sep dist: Optional. The minum number of samples between adjacent peaks.
-               Default: 1000
+    -sep ms: Optional. The mininum number of millisec between adjacent peaks.
+               Default: 20
 	
 	-plot: Optional. Default false. Generate files for plotting in matlab.
 

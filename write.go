@@ -13,30 +13,3 @@
 //  limitations under the License.
 
 package main
-
-import (
-	"encoding/json"
-
-	"github.com/goccmack/goutil/ioutil"
-)
-
-type OutRecord struct {
-	FileName    string // Input file
-	SampleRate  int    // Hz
-	NumChannels int
-}
-
-func writeFrameRecords() {
-	or := &OutRecord{
-		FileName:    inFileName,
-		SampleRate:  fs,
-		NumChannels: numChannels,
-	}
-	buf, err := json.Marshal(or)
-	if err != nil {
-		panic(err)
-	}
-	if err := ioutil.WriteFile(outFileName, buf); err != nil {
-		panic(err)
-	}
-}
